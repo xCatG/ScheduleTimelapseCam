@@ -233,17 +233,19 @@ public class CameraActivity extends Activity {
     protected void onResume() {
         super.onResume();
         mHideHandler.postDelayed(startCameraPreviewRunnable, 1000);
-        setupScheduledCallback();
+        //setupScheduledCallback();
     }
 
     private void setupScheduledCallback(){
         Calendar calendar = Calendar.getInstance();
         // 7 AM
-        calendar.set(Calendar.HOUR_OF_DAY, 7);
-        calendar.set(Calendar.MINUTE, 0);
-        calendar.set(Calendar.SECOND, 0);
-        PendingIntent pi = PendingIntent.getService(this, 0,
-                new Intent(this, CameraActivity.class),PendingIntent.FLAG_UPDATE_CURRENT);
+//        calendar.set(Calendar.HOUR_OF_DAY, 7);
+//        calendar.set(Calendar.MINUTE, 0);
+//        calendar.set(Calendar.SECOND, 0);
+        calendar.setTimeInMillis(System.currentTimeMillis());
+        calendar.add(Calendar.SECOND, 3);
+        PendingIntent pi = PendingIntent.getBroadcast(this, 0,
+                new Intent(this, SchdReceiver.class),PendingIntent.FLAG_UPDATE_CURRENT);
         almgr.setRepeating(AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(),
                 AlarmManager.INTERVAL_DAY, pi);
 
@@ -390,5 +392,9 @@ public class CameraActivity extends Activity {
             setCaptureButtonText("Stop");
 
         }
+    }
+
+    public void onDummy(View v){
+       setupScheduledCallback();
     }
 }
