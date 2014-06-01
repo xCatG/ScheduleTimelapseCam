@@ -6,8 +6,10 @@ import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.hardware.Camera;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
@@ -15,11 +17,13 @@ import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
+import android.widget.Toast;
 
 import java.io.IOException;
 import java.util.Calendar;
@@ -70,6 +74,9 @@ public class CameraActivity extends Activity {
     private Button captureButton;
 
     private AlarmManager almgr = null;
+    private boolean receiverRegistered = false;
+    private LalaReceiver myReceiver = null;//
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -77,7 +84,7 @@ public class CameraActivity extends Activity {
 
         setContentView(R.layout.activity_camera);
         almgr = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
-
+        myReceiver = new LalaReceiver();
         final View controlsView = findViewById(R.id.fullscreen_content_controls);
         //final View contentView = findViewById(R.id.surface_view);
         mPreview = (TextureView) findViewById(R.id.surface_view);
@@ -169,24 +176,52 @@ public class CameraActivity extends Activity {
         }
     };
 
-    Handler mHideHandler = new Handler();
-    Runnable mHideRunnable = new Runnable() {
+    public static final int MSG_START_RECORDING = 42;
+    public static final int MSG_END_RECORDING = MSG_START_RECORDING + 1;
+
+    Handler mHandler = new Handler(){
         @Override
-        public void run() {
-            mSystemUiHider.hide();
+        public void handleMessage(Message msg) {
+            switch(msg.what){
+                case MSG_START_RECORDING:
+                    Toast.makeText(CameraActivity.this, "start recording received", Toast.LENGTH_SHORT).show();
+                    startOrStopRecording();
+                    scheduleEndRecording();
+                    break;
+
+                case MSG_END_RECORDING:
+                    Toast.makeText(CameraActivity.this, "End recording received", Toast.LENGTH_SHORT).show();
+                    startOrStopRecording();
+                    break;
+            }
+            super.handleMessage(msg);
         }
     };
+
+    private void scheduleEndRecording(){
+        Calendar calendar = Calendar.getInstance();
+        // 7 AM
+//        calendar.set(Calendar.HOUR_OF_DAY, 7);
+//        calendar.set(Calendar.MINUTE, 0);
+//        calendar.set(Calendar.SECOND, 0);
+        calendar.setTimeInMillis(System.currentTimeMillis());
+        calendar.add(Calendar.SECOND, 5);
+        PendingIntent pi = createPendingIntentForReceiver(S_END);
+        almgr.setRepeating(AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(),
+                AlarmManager.INTERVAL_DAY, pi);
+
+    }
 
     /**
      * Schedules a call to hide() in [delay] milliseconds, canceling any
      * previously scheduled calls.
      */
     private void delayedHide(int delayMillis) {
-//        mHideHandler.removeCallbacks(mHideRunnable);
-//        mHideHandler.postDelayed(mHideRunnable, delayMillis);
+//        mHandler.removeCallbacks(mHideRunnable);
+//        mHandler.postDelayed(mHideRunnable, delayMillis);
     }
 
-    public void onCaptureClick(View view) {
+    private void startOrStopRecording(){
         if (isRecording) {
 
             // stop recording and release camera
@@ -209,8 +244,11 @@ public class CameraActivity extends Activity {
         } else {
             mCamera.release();
             new MediaPrepareTask().execute(null, null, null);
-
         }
+    }
+
+    public void onCaptureClick(View view) {
+        startOrStopRecording();
     }
 
     private void setCaptureButtonText(String title) {
@@ -232,9 +270,20 @@ public class CameraActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        mHideHandler.postDelayed(startCameraPreviewRunnable, 1000);
+        registerReceiver();
+
+        mHandler.postDelayed(startCameraPreviewRunnable, 1000);
         //setupScheduledCallback();
     }
+
+    private void registerReceiver() {
+        if(!receiverRegistered){
+            registerReceiver(myReceiver, new IntentFilter(BCAST_STR));
+            receiverRegistered = true;
+        }
+    }
+
+    private static final String BCAST_STR = "com.cattailsw.timelapsetest.timelapse_broadcast";
 
     private void setupScheduledCallback(){
         Calendar calendar = Calendar.getInstance();
@@ -244,11 +293,9 @@ public class CameraActivity extends Activity {
 //        calendar.set(Calendar.SECOND, 0);
         calendar.setTimeInMillis(System.currentTimeMillis());
         calendar.add(Calendar.SECOND, 3);
-        PendingIntent pi = PendingIntent.getBroadcast(this, 0,
-                new Intent(this, SchdReceiver.class),PendingIntent.FLAG_UPDATE_CURRENT);
+        PendingIntent pi = createPendingIntentForReceiver(S_START);
         almgr.setRepeating(AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(),
                 AlarmManager.INTERVAL_DAY, pi);
-
     }
 
     @Override
@@ -258,6 +305,7 @@ public class CameraActivity extends Activity {
         releaseMediaRecorder();
         // release the camera immediately on pause event
         releaseCamera();
+        releaseBcastReceiver();
     }
 
     private void releaseMediaRecorder() {
@@ -278,6 +326,13 @@ public class CameraActivity extends Activity {
             // release the camera for other applications
             mCamera.release();
             mCamera = null;
+        }
+    }
+
+    private void releaseBcastReceiver(){
+        if(receiverRegistered) {
+            unregisterReceiver(myReceiver);
+            receiverRegistered = false;
         }
     }
 
@@ -316,8 +371,8 @@ public class CameraActivity extends Activity {
         // END_INCLUDE (configure_media_recorder)
 
         // Step 5: set framerate for Time Lapse capture
-        mMediaRecorder.setCaptureRate(0.1f); // take one frame per 10 seconds
-
+        //mMediaRecorder.setCaptureRate(0.1f); // take one frame per 10 seconds
+        mMediaRecorder.setCaptureRate(1.0f); // take one frame per 1 seconds
         // Step 5: Prepare configured MediaRecorder
         try {
             mMediaRecorder.prepare();
@@ -397,4 +452,43 @@ public class CameraActivity extends Activity {
     public void onDummy(View v){
        setupScheduledCallback();
     }
+
+    public static final String SCH_START = "schedule_start_time";
+    public static final String SCH_END = "schedule_end_time";
+    public static final int S_START = 1;
+    public static final int S_END = S_START + 1;
+
+    final PendingIntent createPendingIntentForReceiver(int type){
+        Intent piI = new Intent(BCAST_STR);
+        switch(type) {
+            case S_START:
+                piI.putExtra(SCH_START, true);
+                break;
+            case S_END:
+                piI.putExtra(SCH_END, true);
+                break;
+        }
+
+        PendingIntent pi = PendingIntent.getBroadcast(this, 0,
+                piI, PendingIntent.FLAG_UPDATE_CURRENT);
+
+        return pi;
+    }
+
+    private class LalaReceiver extends BroadcastReceiver {
+
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if(intent.hasExtra(SCH_START)) {
+                Toast.makeText(CameraActivity.this, "start received in LalaReceiver", Toast.LENGTH_SHORT).show();
+                mHandler.sendEmptyMessage(MSG_START_RECORDING);
+            }
+            else if(intent.hasExtra(SCH_END)){
+                Toast.makeText(CameraActivity.this, "end received in LalaReceiver", Toast.LENGTH_SHORT).show();
+                mHandler.sendEmptyMessage(MSG_END_RECORDING);
+            }
+        }
+    }
+
 }
