@@ -77,6 +77,7 @@ public class CameraActivity extends Activity {
     private boolean receiverRegistered = false;
     private LalaReceiver myReceiver = null;//
 
+    private RecScheduleData recordingSchedule = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -148,6 +149,13 @@ public class CameraActivity extends Activity {
         // operations to prevent the jarring behavior of controls going away
         // while interacting with the UI.
         findViewById(R.id.dummy_button).setOnTouchListener(mDelayHideTouchListener);
+
+        if(recordingSchedule == null) {
+            // schedule at 7am everyday and record for 12 hours
+            //recordingSchedule = new RecScheduleData(7, 0, 0, 12 * 60 * 60 * 1000, AlarmManager.INTERVAL_DAY);
+            recordingSchedule = new RecScheduleData(17, 0, 0, 60 * 1000 /* 1 min*/, AlarmManager.INTERVAL_DAY);
+
+        }
     }
 
     @Override
@@ -198,19 +206,6 @@ public class CameraActivity extends Activity {
         }
     };
 
-    private void scheduleEndRecording(){
-        Calendar calendar = Calendar.getInstance();
-        // 7 AM
-//        calendar.set(Calendar.HOUR_OF_DAY, 7);
-//        calendar.set(Calendar.MINUTE, 0);
-//        calendar.set(Calendar.SECOND, 0);
-        calendar.setTimeInMillis(System.currentTimeMillis());
-        calendar.add(Calendar.SECOND, 5);
-        PendingIntent pi = createPendingIntentForReceiver(S_END);
-        almgr.setRepeating(AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(),
-                AlarmManager.INTERVAL_DAY, pi);
-
-    }
 
     /**
      * Schedules a call to hide() in [delay] milliseconds, canceling any
@@ -285,17 +280,20 @@ public class CameraActivity extends Activity {
 
     private static final String BCAST_STR = "com.cattailsw.timelapsetest.timelapse_broadcast";
 
+    private boolean recScheduled = false;
+
+    private void scheduleEndRecording(){
+        PendingIntent pi = createPendingIntentForReceiver(S_END);
+        almgr.set(AlarmManager.RTC_WAKEUP, recordingSchedule.startTimeInMillis + recordingSchedule.recordInterval,
+                pi);
+    }
+
     private void setupScheduledCallback(){
-        Calendar calendar = Calendar.getInstance();
-        // 7 AM
-//        calendar.set(Calendar.HOUR_OF_DAY, 7);
-//        calendar.set(Calendar.MINUTE, 0);
-//        calendar.set(Calendar.SECOND, 0);
-        calendar.setTimeInMillis(System.currentTimeMillis());
-        calendar.add(Calendar.SECOND, 3);
         PendingIntent pi = createPendingIntentForReceiver(S_START);
-        almgr.setRepeating(AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(),
-                AlarmManager.INTERVAL_DAY, pi);
+        almgr.setRepeating(AlarmManager.RTC_WAKEUP, recordingSchedule.startTimeInMillis,
+                recordingSchedule.repeatInterval, pi);
+        Toast.makeText(this, "recording scheduled to start at ", Toast.LENGTH_SHORT).show();
+        recScheduled = true;
     }
 
     @Override
@@ -372,7 +370,7 @@ public class CameraActivity extends Activity {
 
         // Step 5: set framerate for Time Lapse capture
         //mMediaRecorder.setCaptureRate(0.1f); // take one frame per 10 seconds
-        mMediaRecorder.setCaptureRate(1.0f); // take one frame per 1 seconds
+        mMediaRecorder.setCaptureRate(0.1f); // take one frame per 1 seconds
         // Step 5: Prepare configured MediaRecorder
         try {
             mMediaRecorder.prepare();
@@ -407,6 +405,7 @@ public class CameraActivity extends Activity {
 
         // likewise for the camera object itself.
         parameters.setPreviewSize(profile.videoFrameWidth, profile.videoFrameHeight);
+        parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
         mCamera.setParameters(parameters);
 
         mCamera.setPreviewTexture(mPreview.getSurfaceTexture());
@@ -476,8 +475,6 @@ public class CameraActivity extends Activity {
     }
 
     private class LalaReceiver extends BroadcastReceiver {
-
-
         @Override
         public void onReceive(Context context, Intent intent) {
             if(intent.hasExtra(SCH_START)) {
@@ -488,6 +485,24 @@ public class CameraActivity extends Activity {
                 Toast.makeText(CameraActivity.this, "end received in LalaReceiver", Toast.LENGTH_SHORT).show();
                 mHandler.sendEmptyMessage(MSG_END_RECORDING);
             }
+        }
+    }
+
+    private class RecScheduleData {
+
+        long startTimeInMillis;
+        long recordInterval;
+        long repeatInterval; // use AlarmManger.INTERVAL*
+
+        RecScheduleData(int startHR, int startMin, int startSec, long recInterval, long repeatType){
+            repeatInterval = repeatType;
+            recordInterval = recInterval;
+
+            Calendar calendar = Calendar.getInstance();
+            calendar.set(Calendar.HOUR_OF_DAY, startHR);
+            calendar.set(Calendar.MINUTE, startMin);
+            calendar.set(Calendar.SECOND, startSec);
+            startTimeInMillis = calendar.getTimeInMillis();
         }
     }
 

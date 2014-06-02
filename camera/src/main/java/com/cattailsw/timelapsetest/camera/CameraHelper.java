@@ -34,6 +34,8 @@ public class CameraHelper {
 
     public static final int MEDIA_TYPE_IMAGE = 1;
     public static final int MEDIA_TYPE_VIDEO = 2;
+    public static final String STR_APP_NAME = "TimeLapse";
+    public static final String TAG = "CameraSample";
 
     /**
      * Iterate over supported camera preview sizes to see which one best fits the
@@ -151,14 +153,14 @@ public class CameraHelper {
         }
 
         File mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_PICTURES), "CameraSample");
+                Environment.DIRECTORY_DCIM), STR_APP_NAME);
         // This location works best if you want the created images to be shared
         // between applications and persist after your app has been uninstalled.
 
         // Create the storage directory if it does not exist
         if (! mediaStorageDir.exists()){
             if (! mediaStorageDir.mkdirs()) {
-                Log.d("CameraSample", "failed to create directory");
+                Log.d(TAG, "failed to create directory");
                 return null;
             }
         }
