@@ -19,7 +19,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
-import android.view.MotionEvent;
 import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
@@ -38,39 +37,13 @@ import java.util.List;
  */
 @SuppressWarnings("ResourceType")
 public class CameraActivity extends Activity {
-    /**
-     * Whether or not the system UI should be auto-hidden after
-     * {@link #AUTO_HIDE_DELAY_MILLIS} milliseconds.
-     */
-    private static final boolean AUTO_HIDE = true;
+    private static final String TAG = "TimeLapseCamera";
 
-    /**
-     * If {@link #AUTO_HIDE} is set, the number of milliseconds to wait after
-     * user interaction before hiding the system UI.
-     */
-    private static final int AUTO_HIDE_DELAY_MILLIS = 3000;
-
-    /**
-     * If set, will toggle the system UI visibility upon interaction. Otherwise,
-     * will show the system UI visibility upon interaction.
-     */
-    private static final boolean TOGGLE_ON_CLICK = true;
-
-    /**
-     * The flags to pass to {@link SystemUiHider#getInstance}.
-     */
-    private static final int HIDER_FLAGS = SystemUiHider.FLAG_HIDE_NAVIGATION;
-
-    /**
-     * The instance of the {@link SystemUiHider} for this activity.
-     */
-    private SystemUiHider mSystemUiHider;
     private Camera mCamera;
     private TextureView mPreview;
     private MediaRecorder mMediaRecorder;
 
     private boolean isRecording = false;
-    private static final String TAG = "Recorder";
     private Button captureButton;
 
     private AlarmManager almgr = null;
@@ -78,6 +51,10 @@ public class CameraActivity extends Activity {
     private LalaReceiver myReceiver = null;//
 
     private RecScheduleData recordingSchedule = null;
+    private static final String BCAST_STR = "com.cattailsw.timelapsetest.timelapse_broadcast";
+
+    private boolean recScheduled = false;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -86,69 +63,12 @@ public class CameraActivity extends Activity {
         setContentView(R.layout.activity_camera);
         almgr = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
         myReceiver = new LalaReceiver();
-        final View controlsView = findViewById(R.id.fullscreen_content_controls);
-        //final View contentView = findViewById(R.id.surface_view);
+
         mPreview = (TextureView) findViewById(R.id.surface_view);
         captureButton = (Button) findViewById(R.id.button_capture);
 
         // Set up an instance of SystemUiHider to control the system UI for
         // this activity.
-        mSystemUiHider = SystemUiHider.getInstance(this, mPreview, HIDER_FLAGS);
-        mSystemUiHider.setup();
-        mSystemUiHider
-                .setOnVisibilityChangeListener(new SystemUiHider.OnVisibilityChangeListener() {
-                    // Cached values.
-                    int mControlsHeight;
-                    int mShortAnimTime;
-
-                    @Override
-                    @TargetApi(Build.VERSION_CODES.HONEYCOMB_MR2)
-                    public void onVisibilityChange(boolean visible) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB_MR2) {
-                            // If the ViewPropertyAnimator API is available
-                            // (Honeycomb MR2 and later), use it to animate the
-                            // in-layout UI controls at the bottom of the
-                            // screen.
-                            if (mControlsHeight == 0) {
-                                mControlsHeight = controlsView.getHeight();
-                            }
-                            if (mShortAnimTime == 0) {
-                                mShortAnimTime = getResources().getInteger(
-                                        android.R.integer.config_shortAnimTime);
-                            }
-                            controlsView.animate()
-                                    .translationY(visible ? 0 : mControlsHeight)
-                                    .setDuration(mShortAnimTime);
-                        } else {
-                            // If the ViewPropertyAnimator APIs aren't
-                            // available, simply show or hide the in-layout UI
-                            // controls.
-                            controlsView.setVisibility(visible ? View.VISIBLE : View.GONE);
-                        }
-
-                        if (visible && AUTO_HIDE) {
-                            // Schedule a hide().
-                            delayedHide(AUTO_HIDE_DELAY_MILLIS);
-                        }
-                    }
-                });
-
-        // Set up the user interaction to manually show or hide the system UI.
-//        contentView.setOnClickListener(new View.OnClickListener() {
-//            @Override
-//            public void onClick(View view) {
-//                if (TOGGLE_ON_CLICK) {
-//                    mSystemUiHider.toggle();
-//                } else {
-//                    mSystemUiHider.show();
-//                }
-//            }
-//        });
-
-        // Upon interacting with UI controls, delay any scheduled hide()
-        // operations to prevent the jarring behavior of controls going away
-        // while interacting with the UI.
-        findViewById(R.id.dummy_button).setOnTouchListener(mDelayHideTouchListener);
 
         if(recordingSchedule == null) {
             // schedule at 7am everyday and record for 12 hours
@@ -168,22 +88,6 @@ public class CameraActivity extends Activity {
         //delayedHide(100);
     }
 
-
-    /**
-     * Touch listener to use for in-layout UI controls to delay hiding the
-     * system UI. This is to prevent the jarring behavior of controls going away
-     * while interacting with activity UI.
-     */
-    View.OnTouchListener mDelayHideTouchListener = new View.OnTouchListener() {
-        @Override
-        public boolean onTouch(View view, MotionEvent motionEvent) {
-            if (AUTO_HIDE) {
-                delayedHide(AUTO_HIDE_DELAY_MILLIS);
-            }
-            return false;
-        }
-    };
-
     public static final int MSG_START_RECORDING = 42;
     public static final int MSG_END_RECORDING = MSG_START_RECORDING + 1;
 
@@ -200,21 +104,13 @@ public class CameraActivity extends Activity {
                 case MSG_END_RECORDING:
                     Toast.makeText(CameraActivity.this, "End recording received", Toast.LENGTH_SHORT).show();
                     startOrStopRecording();
+                    scheduleStartRecording();
                     break;
             }
             super.handleMessage(msg);
         }
     };
 
-
-    /**
-     * Schedules a call to hide() in [delay] milliseconds, canceling any
-     * previously scheduled calls.
-     */
-    private void delayedHide(int delayMillis) {
-//        mHandler.removeCallbacks(mHideRunnable);
-//        mHandler.postDelayed(mHideRunnable, delayMillis);
-    }
 
     private void startOrStopRecording(){
         if (isRecording) {
@@ -268,7 +164,7 @@ public class CameraActivity extends Activity {
         registerReceiver();
 
         mHandler.postDelayed(startCameraPreviewRunnable, 1000);
-        //setupScheduledCallback();
+        //scheduleStartRecording();
     }
 
     private void registerReceiver() {
@@ -278,17 +174,14 @@ public class CameraActivity extends Activity {
         }
     }
 
-    private static final String BCAST_STR = "com.cattailsw.timelapsetest.timelapse_broadcast";
-
-    private boolean recScheduled = false;
-
     private void scheduleEndRecording(){
         PendingIntent pi = createPendingIntentForReceiver(S_END);
         almgr.set(AlarmManager.RTC_WAKEUP, recordingSchedule.startTimeInMillis + recordingSchedule.recordInterval,
                 pi);
+        recScheduled = false;
     }
 
-    private void setupScheduledCallback(){
+    private void scheduleStartRecording(){
         PendingIntent pi = createPendingIntentForReceiver(S_START);
         almgr.setRepeating(AlarmManager.RTC_WAKEUP, recordingSchedule.startTimeInMillis,
                 recordingSchedule.repeatInterval, pi);
@@ -370,8 +263,9 @@ public class CameraActivity extends Activity {
 
         // Step 5: set framerate for Time Lapse capture
         //mMediaRecorder.setCaptureRate(0.1f); // take one frame per 10 seconds
-        mMediaRecorder.setCaptureRate(0.1f); // take one frame per 1 seconds
-        // Step 5: Prepare configured MediaRecorder
+        mMediaRecorder.setCaptureRate(recordingSchedule.recordingFPS); // take one frame per 1 seconds
+
+        // Step 6: Prepare configured MediaRecorder
         try {
             mMediaRecorder.prepare();
         } catch (IllegalStateException e) {
@@ -449,7 +343,7 @@ public class CameraActivity extends Activity {
     }
 
     public void onDummy(View v){
-       setupScheduledCallback();
+       scheduleStartRecording();
     }
 
     public static final String SCH_START = "schedule_start_time";
@@ -494,7 +388,13 @@ public class CameraActivity extends Activity {
         long recordInterval;
         long repeatInterval; // use AlarmManger.INTERVAL*
 
-        RecScheduleData(int startHR, int startMin, int startSec, long recInterval, long repeatType){
+        float recordingFPS = 0.1f; // default to 1 frame per 10 second
+
+        RecScheduleData(int startHR, int startMin, int startSec, long recInterval, long repeatType) {
+            this(startHR, startMin, startSec, recInterval, repeatType, 0.1f);
+        }
+
+        RecScheduleData(int startHR, int startMin, int startSec, long recInterval, long repeatType, float fps){
             repeatInterval = repeatType;
             recordInterval = recInterval;
 
@@ -503,6 +403,7 @@ public class CameraActivity extends Activity {
             calendar.set(Calendar.MINUTE, startMin);
             calendar.set(Calendar.SECOND, startSec);
             startTimeInMillis = calendar.getTimeInMillis();
+            recordingFPS = fps;
         }
     }
 
