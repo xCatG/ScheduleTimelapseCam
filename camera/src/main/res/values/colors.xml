@@ -2,4 +2,5 @@
 
     <color name="black_overlay">#66000000</color>
 
+    <color name="rec_red">#FF0000</color>
 </resources>
