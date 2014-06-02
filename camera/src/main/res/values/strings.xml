@@ -4,5 +4,6 @@
     <string name="app_name">TimeLapseTest</string>
     <string name="dummy_button">Schedule Recording</string>
     <string name="button_capture">Capture</string>
-
+    <string name="rec_stat_text">Time captured: %1$s Time Remain: %2$s</string>
+    <string name="sch_text">Scheduled Recording time=%s</string>
 </resources>
