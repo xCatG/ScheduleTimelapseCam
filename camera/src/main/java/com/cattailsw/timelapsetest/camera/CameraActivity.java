@@ -13,6 +13,7 @@ import android.content.IntentFilter;
 import android.hardware.Camera;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
@@ -25,6 +26,7 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
@@ -193,11 +195,24 @@ public class CameraActivity extends Activity {
             mHandler.removeMessages(MSG_UPDATE_STAT);
             updateRecStat();
             dummyButton.setEnabled(true);
+            notifyMediaScanner();
         } else {
             mCamera.release();
             new MediaPrepareTask().execute(null, null, null);
             dummyButton.setEnabled(false);
         }
+    }
+
+    private void notifyMediaScanner(){
+        Uri uri = null;
+        if (currOutFileName == null) {
+            File f = CameraHelper.getOutputMediaFile(CameraHelper.MEDIA_TYPE_VIDEO);
+            uri = Uri.fromFile(f);
+        } else {
+            uri = Uri.fromFile(new File(currOutFileName));
+        }
+        Intent i = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, uri);
+        sendBroadcast(i);
     }
 
     public void onCaptureClick(View view) {
@@ -226,7 +241,10 @@ public class CameraActivity extends Activity {
         registerReceiver();
 
         mHandler.postDelayed(startCameraPreviewRunnable, 1000);
-        //scheduleStartRecording();
+
+        recordingSchedule = new RecScheduleData(7, 0, 0, 12 * 60 * 60 * 1000, AlarmManager.INTERVAL_DAY);
+
+        scheduleStartRecording();
     }
 
     private void registerReceiver() {
@@ -295,6 +313,8 @@ public class CameraActivity extends Activity {
         }
     }
 
+    private String currOutFileName = null;
+
     @TargetApi(Build.VERSION_CODES.HONEYCOMB)
     private boolean prepareVideoRecorder() {
 
@@ -337,12 +357,15 @@ public class CameraActivity extends Activity {
         // Step 6: Prepare configured MediaRecorder
         try {
             mMediaRecorder.prepare();
+            currOutFileName = outFileName;
         } catch (IllegalStateException e) {
             Log.d(TAG, "IllegalStateException preparing MediaRecorder: " + e.getMessage());
+            currOutFileName = null;
             releaseMediaRecorder();
             return false;
         } catch (IOException e) {
             Log.d(TAG, "IOException preparing MediaRecorder: " + e.getMessage());
+            currOutFileName = null;
             releaseMediaRecorder();
             return false;
         }

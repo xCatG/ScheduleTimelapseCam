@@ -138,6 +138,9 @@ public class CameraHelper {
         return null;
     }
 
+    public static final int STORAGE_INT = 0;
+    public static final int STORAGE_EXT_SD = 1;
+
     /**
      * Creates a media file in the {@code Environment.DIRECTORY_PICTURES} directory. The directory
      * is persistent and available to other applications like gallery.
@@ -145,15 +148,24 @@ public class CameraHelper {
      * @param type Media type. Can be video or image.
      * @return A file object pointing to the newly created file.
      */
-    public  static File getOutputMediaFile(int type){
+    public  static File getOutputMediaFile(int type) {
+        return getOutputMediaFile(type, STORAGE_EXT_SD);
+    }
+
+    private static File getActualExtSDCard(String extra){
+        return new File("/storage/sdcard1/DCIM/Camera" + File.separator + extra); /* for Droid RAZR */
+    }
+
+    public  static File getOutputMediaFile(int type, int location){
+
         // To be safe, you should check that the SDCard is mounted
         // using Environment.getExternalStorageState() before doing this.
         if (!Environment.getExternalStorageState().equalsIgnoreCase(Environment.MEDIA_MOUNTED)) {
             return  null;
         }
 
-        File mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_DCIM), STR_APP_NAME);
+        File mediaStorageDir = (location==STORAGE_INT)?new File(Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_PICTURES), STR_APP_NAME):getActualExtSDCard(STR_APP_NAME);
         // This location works best if you want the created images to be shared
         // between applications and persist after your app has been uninstalled.
 
