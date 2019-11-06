@@ -2,6 +2,7 @@ package com.cattailsw.timelapsetest.camera;
 
 import com.cattailsw.timelapsetest.camera.util.SystemUiHider;
 
+import android.Manifest;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.AlarmManager;
@@ -10,6 +11,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.hardware.Camera;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
@@ -19,6 +21,9 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.support.annotation.NonNull;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.util.Log;
 import android.view.TextureView;
 import android.view.View;
@@ -59,6 +64,7 @@ public class CameraActivity extends Activity {
 
     private RecScheduleData recordingSchedule = null;
     private static final String BCAST_STR = "com.cattailsw.timelapsetest.timelapse_broadcast";
+    private static final int PERM_REQUEST = 42;
 
     private boolean recScheduled = false;
 
@@ -67,8 +73,30 @@ public class CameraActivity extends Activity {
     private TextView schdText = null;
 
     @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        switch(requestCode) {
+            case PERM_REQUEST:
+                if (grantResults.length == 0) {
+                    finish();
+                }
+                break;
+            default:
+                super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        }
+    }
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+            // Permission is not granted
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                    PERM_REQUEST);
+        }
+
 
         setContentView(R.layout.activity_camera);
         almgr = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
@@ -107,12 +135,11 @@ public class CameraActivity extends Activity {
         statText.setText(String.format(getString(R.string.rec_stat_text), recTime, remain));
     }
 
-    private void updateSchdStat(){
-        if(recordingSchedule != null){
+    private void updateSchdStat() {
+        if (recordingSchedule != null) {
             schdText.setText(String.format(getString(R.string.sch_text), recordingSchedule.getStartTimeString()));
             schdText.setVisibility(View.VISIBLE);
-        }
-        else {
+        } else {
             schdText.setVisibility(View.INVISIBLE);
         }
     }
@@ -203,7 +230,7 @@ public class CameraActivity extends Activity {
         }
     }
 
-    private void notifyMediaScanner(){
+    private void notifyMediaScanner() {
         Uri uri = null;
         if (currOutFileName == null) {
             File f = CameraHelper.getOutputMediaFile(CameraHelper.MEDIA_TYPE_VIDEO);
@@ -264,7 +291,7 @@ public class CameraActivity extends Activity {
     private void scheduleStartRecording() {
         PendingIntent pi = createPendingIntentForReceiver(S_START);
 
-        if(recordingSchedule.startTimeInMillis < System.currentTimeMillis()){
+        if (recordingSchedule.startTimeInMillis < System.currentTimeMillis()) {
             recordingSchedule.startTimeInMillis += AlarmManager.INTERVAL_DAY;
             Log.d(TAG, "set schedule to one day later");
         }
@@ -352,7 +379,7 @@ public class CameraActivity extends Activity {
         // Step 5: set framerate for Time Lapse capture
         //mMediaRecorder.setCaptureRate(0.1f); // take one frame per 10 seconds
 
-        mMediaRecorder.setCaptureRate(recordingSchedule!=null?recordingSchedule.recordingFPS:0.1f); // take one frame per 1 seconds
+        mMediaRecorder.setCaptureRate(recordingSchedule != null ? recordingSchedule.recordingFPS : 0.1f); // take one frame per 1 seconds
 
         // Step 6: Prepare configured MediaRecorder
         try {
@@ -510,7 +537,7 @@ public class CameraActivity extends Activity {
             return startTimeInMillis + recordInterval;
         }
 
-        public String getStartTimeString(){
+        public String getStartTimeString() {
             Date d = new Date(startTimeInMillis);
             SimpleDateFormat sdf = new SimpleDateFormat();
             return sdf.format(d);
