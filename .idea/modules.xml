@@ -2,9 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/TimeLapseTest.iml" filepath="$PROJECT_DIR$/TimeLapseTest.iml" />
+      <module fileurl="file://$PROJECT_DIR$/ScheduleTimelapseCam.iml" filepath="$PROJECT_DIR$/ScheduleTimelapseCam.iml" />
       <module fileurl="file://$PROJECT_DIR$/camera/camera.iml" filepath="$PROJECT_DIR$/camera/camera.iml" />
     </modules>
   </component>
 </project>
-
