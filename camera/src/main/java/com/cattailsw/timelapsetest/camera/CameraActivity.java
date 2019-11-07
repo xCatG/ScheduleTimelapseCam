@@ -66,15 +66,13 @@ public class CameraActivity extends Activity {
     private static final String BCAST_STR = "com.cattailsw.timelapsetest.timelapse_broadcast";
     private static final int PERM_REQUEST = 42;
 
-    private boolean recScheduled = false;
-
     private View recStat = null;
     private TextView statText = null;
     private TextView schdText = null;
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        switch(requestCode) {
+        switch (requestCode) {
             case PERM_REQUEST:
                 if (grantResults.length == 0) {
                     finish();
@@ -285,7 +283,6 @@ public class CameraActivity extends Activity {
         PendingIntent pi = createPendingIntentForReceiver(S_END);
         almgr.set(AlarmManager.RTC_WAKEUP, recordingSchedule.startTimeInMillis + recordingSchedule.recordInterval,
                 pi);
-        recScheduled = false;
     }
 
     private void scheduleStartRecording() {
@@ -299,7 +296,6 @@ public class CameraActivity extends Activity {
         almgr.setRepeating(AlarmManager.RTC_WAKEUP, recordingSchedule.startTimeInMillis,
                 recordingSchedule.repeatInterval, pi);
         Toast.makeText(this, "recording scheduled to start at " + recordingSchedule.getStartTimeString(), Toast.LENGTH_SHORT).show();
-        recScheduled = true;
     }
 
     @Override
