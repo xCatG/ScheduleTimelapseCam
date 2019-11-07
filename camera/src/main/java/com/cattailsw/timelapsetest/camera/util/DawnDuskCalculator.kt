@@ -14,6 +14,9 @@ class DawnDuskCalculator {
         val dawn = sunriseSunset[0]
         val dusk = sunriseSunset[1]
 
+        // add 1 hr to each
+        dawn.add(Calendar.HOUR, -1)
+        dusk.add(Calendar.HOUR, 1)
 
         val scheduleData = RecScheduleData(0, 0, 0, dusk.timeInMillis - dawn.timeInMillis, 0)
         scheduleData.startTimeInMillis = dawn.timeInMillis
