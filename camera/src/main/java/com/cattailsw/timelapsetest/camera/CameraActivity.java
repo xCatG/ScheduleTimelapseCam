@@ -1,5 +1,7 @@
 package com.cattailsw.timelapsetest.camera;
 
+import com.cattailsw.timelapsetest.camera.util.DawnDuskCalculator;
+import com.cattailsw.timelapsetest.camera.util.RecScheduleData;
 import com.cattailsw.timelapsetest.camera.util.SystemUiHider;
 
 import android.Manifest;
@@ -33,9 +35,7 @@ import android.widget.Toast;
 
 import java.io.File;
 import java.io.IOException;
-import java.text.SimpleDateFormat;
 import java.util.Calendar;
-import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -57,7 +57,7 @@ public class CameraActivity extends Activity {
     private boolean isRecording = false;
     private long captureStartTime = -1L;
     private Button captureButton;
-    private Button dummyButton;
+    private Button scheduleButton;
     private AlarmManager almgr = null;
     private boolean receiverRegistered = false;
     private LalaReceiver myReceiver = null;//
@@ -69,6 +69,7 @@ public class CameraActivity extends Activity {
     private View recStat = null;
     private TextView statText = null;
     private TextView schdText = null;
+    private DawnDuskCalculator calculatoor = new DawnDuskCalculator();
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -102,7 +103,7 @@ public class CameraActivity extends Activity {
 
         mPreview = (TextureView) findViewById(R.id.surface_view);
         captureButton = (Button) findViewById(R.id.button_capture);
-        dummyButton = (Button) findViewById(R.id.dummy_button);
+        scheduleButton = (Button) findViewById(R.id.schedule_button);
         recStat = findViewById(R.id.rec_indicator);
         statText = (TextView) findViewById(R.id.stat_text);
         schdText = (TextView) findViewById(R.id.schd_text);
@@ -152,16 +153,6 @@ public class CameraActivity extends Activity {
         );
     }
 
-    @Override
-    protected void onPostCreate(Bundle savedInstanceState) {
-        super.onPostCreate(savedInstanceState);
-
-        // Trigger the initial hide() shortly after the activity has been
-        // created, to briefly hint to the user that UI controls
-        // are available.
-        //delayedHide(100);
-    }
-
     public static final int MSG_START_RECORDING = 42;
     public static final int MSG_END_RECORDING = MSG_START_RECORDING + 1;
 
@@ -198,7 +189,6 @@ public class CameraActivity extends Activity {
         }
     };
 
-
     private void startOrStopRecording() {
         if (isRecording) {
             // stop recording and release camera
@@ -219,12 +209,12 @@ public class CameraActivity extends Activity {
             captureStartTime = -1L;
             mHandler.removeMessages(MSG_UPDATE_STAT);
             updateRecStat();
-            dummyButton.setEnabled(true);
+            scheduleButton.setEnabled(true);
             notifyMediaScanner();
         } else {
             mCamera.release();
             new MediaPrepareTask().execute(null, null, null);
-            dummyButton.setEnabled(false);
+            scheduleButton.setEnabled(false);
         }
     }
 
@@ -267,7 +257,7 @@ public class CameraActivity extends Activity {
 
         mHandler.postDelayed(startCameraPreviewRunnable, 1000);
 
-        recordingSchedule = new RecScheduleData(7, 0, 0, 12 * 60 * 60 * 1000, AlarmManager.INTERVAL_DAY);
+        recordingSchedule = calculatoor.getRecordingSchedule(Calendar.getInstance()); //new RecScheduleData(7, 0, 0, 12 * 60 * 60 * 1000, AlarmManager.INTERVAL_DAY);
 
         scheduleStartRecording();
     }
@@ -281,20 +271,21 @@ public class CameraActivity extends Activity {
 
     private void scheduleEndRecording() {
         PendingIntent pi = createPendingIntentForReceiver(S_END);
-        almgr.set(AlarmManager.RTC_WAKEUP, recordingSchedule.startTimeInMillis + recordingSchedule.recordInterval,
+        almgr.set(AlarmManager.RTC_WAKEUP, recordingSchedule.getStartTimeInMillis() + recordingSchedule.getRecordInterval(),
                 pi);
     }
 
     private void scheduleStartRecording() {
         PendingIntent pi = createPendingIntentForReceiver(S_START);
 
-        if (recordingSchedule.startTimeInMillis < System.currentTimeMillis()) {
-            recordingSchedule.startTimeInMillis += AlarmManager.INTERVAL_DAY;
+        if (recordingSchedule.getStartTimeInMillis() < System.currentTimeMillis()) {
+            Calendar nextDay = Calendar.getInstance();
+            nextDay.add(Calendar.DAY_OF_YEAR, 1);
+            recordingSchedule = calculatoor.getRecordingSchedule(nextDay);
             Log.d(TAG, "set schedule to one day later");
         }
 
-        almgr.setRepeating(AlarmManager.RTC_WAKEUP, recordingSchedule.startTimeInMillis,
-                recordingSchedule.repeatInterval, pi);
+        almgr.set(AlarmManager.RTC_WAKEUP, recordingSchedule.getStartTimeInMillis(), pi);
         Toast.makeText(this, "recording scheduled to start at " + recordingSchedule.getStartTimeString(), Toast.LENGTH_SHORT).show();
     }
 
@@ -375,7 +366,7 @@ public class CameraActivity extends Activity {
         // Step 5: set framerate for Time Lapse capture
         //mMediaRecorder.setCaptureRate(0.1f); // take one frame per 10 seconds
 
-        mMediaRecorder.setCaptureRate(recordingSchedule != null ? recordingSchedule.recordingFPS : 0.1f); // take one frame per 1 seconds
+        mMediaRecorder.setCaptureRate(recordingSchedule != null ? recordingSchedule.getRecordingFPS() : 0.1f); // take one frame per 1 seconds
 
         // Step 6: Prepare configured MediaRecorder
         try {
@@ -407,11 +398,8 @@ public class CameraActivity extends Activity {
         Camera.Size optimalSize = CameraHelper.getOptimalPreviewSize(mSupportedPreviewSizes,
                 mPreview.getWidth(), mPreview.getHeight());
 
-        // Use the same size for recording profile.
+        // fix recording to 1080p
         CamcorderProfile profile = CamcorderProfile.get(CamcorderProfile.QUALITY_TIME_LAPSE_1080P);
-        // fix to 1080p
-        //profile.videoFrameWidth = optimalSize.width;
-        //profile.videoFrameHeight = optimalSize.height;
 
         // likewise for the camera object itself.
         //parameters.setPreviewSize(profile.videoFrameWidth, profile.videoFrameHeight);
@@ -460,11 +448,9 @@ public class CameraActivity extends Activity {
         }
     }
 
-    public void onDummy(View v) {
+    public void onScheduleButton(View v) {
         if (recordingSchedule == null) {
-            // schedule at 7am everyday and record for 12 hours
-            recordingSchedule = new RecScheduleData(7, 0, 0, 12 * 60 * 60 * 1000, AlarmManager.INTERVAL_DAY);
-            //recordingSchedule = new RecScheduleData(17, 0, 0, 60 * 1000 /* 1 min*/, AlarmManager.INTERVAL_DAY);
+            recordingSchedule = calculatoor.getRecordingSchedule(Calendar.getInstance());
         }
 
         scheduleStartRecording();
@@ -502,41 +488,6 @@ public class CameraActivity extends Activity {
                 Toast.makeText(CameraActivity.this, "end received in LalaReceiver", Toast.LENGTH_SHORT).show();
                 mHandler.sendEmptyMessage(MSG_END_RECORDING);
             }
-        }
-    }
-
-    private class RecScheduleData {
-
-        long startTimeInMillis;
-        long recordInterval;
-        long repeatInterval; // use AlarmManger.INTERVAL*
-
-        float recordingFPS = 0.1f; // default to 1 frame per 10 second
-
-        RecScheduleData(int startHR, int startMin, int startSec, long recInterval, long repeatType) {
-            this(startHR, startMin, startSec, recInterval, repeatType, 0.1f);
-        }
-
-        RecScheduleData(int startHR, int startMin, int startSec, long recInterval, long repeatType, float fps) {
-            repeatInterval = repeatType;
-            recordInterval = recInterval;
-
-            Calendar calendar = Calendar.getInstance();
-            calendar.set(Calendar.HOUR_OF_DAY, startHR);
-            calendar.set(Calendar.MINUTE, startMin);
-            calendar.set(Calendar.SECOND, startSec);
-            startTimeInMillis = calendar.getTimeInMillis();
-            recordingFPS = fps;
-        }
-
-        public long getEndTimeInMillis() {
-            return startTimeInMillis + recordInterval;
-        }
-
-        public String getStartTimeString() {
-            Date d = new Date(startTimeInMillis);
-            SimpleDateFormat sdf = new SimpleDateFormat();
-            return sdf.format(d);
         }
     }
 
