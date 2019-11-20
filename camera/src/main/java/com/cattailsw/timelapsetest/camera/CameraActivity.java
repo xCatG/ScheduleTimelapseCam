@@ -96,7 +96,6 @@ public class CameraActivity extends Activity {
                     PERM_REQUEST);
         }
 
-
         setContentView(R.layout.activity_camera);
         almgr = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
         myReceiver = new LalaReceiver();
@@ -116,6 +115,8 @@ public class CameraActivity extends Activity {
 
     private static final String STR_NA = "N/A";
 
+    private long scheduledEndTimeMills = -1L;
+
     private void updateRecStat() {
         recStat.setVisibility(isRecording ? View.VISIBLE : View.INVISIBLE);
         if (captureStartTime < 0) {
@@ -127,7 +128,9 @@ public class CameraActivity extends Activity {
         String recTime = formatTimeToHHMMSS(displayTime);
 
         String remain = STR_NA;
-        if (recordingSchedule != null && System.currentTimeMillis() < recordingSchedule.getEndTimeInMillis()) {
+        if (scheduledEndTimeMills > 0) {
+            remain = formatTimeToHHMMSS(scheduledEndTimeMills - System.currentTimeMillis());
+        } else if (recordingSchedule != null && System.currentTimeMillis() < recordingSchedule.getEndTimeInMillis()) {
             remain = formatTimeToHHMMSS(recordingSchedule.getEndTimeInMillis() - System.currentTimeMillis());
         }
 
@@ -231,6 +234,16 @@ public class CameraActivity extends Activity {
     }
 
     public void onCaptureClick(View view) {
+        // if there is an active schedule, should schedule end to current capture
+        // before the starting time of active schedule
+
+        if (!isRecording && recordingSchedule != null) {
+            PendingIntent pi = createPendingIntentForReceiver(S_END);
+            scheduledEndTimeMills = recordingSchedule.getStartTimeInMillis() - 10000;
+            almgr.set(AlarmManager.RTC_WAKEUP, scheduledEndTimeMills, pi);
+            Toast.makeText(this, "Schedule to stop 10 seconds before next start time", Toast.LENGTH_SHORT).show();
+        }
+
         startOrStopRecording();
     }
 
@@ -271,8 +284,8 @@ public class CameraActivity extends Activity {
 
     private void scheduleEndRecording() {
         PendingIntent pi = createPendingIntentForReceiver(S_END);
-        almgr.set(AlarmManager.RTC_WAKEUP, recordingSchedule.getStartTimeInMillis() + recordingSchedule.getRecordInterval(),
-                pi);
+        scheduledEndTimeMills = recordingSchedule.getStartTimeInMillis() + recordingSchedule.getRecordInterval();
+        almgr.set(AlarmManager.RTC_WAKEUP, scheduledEndTimeMills, pi);
     }
 
     private void scheduleStartRecording() {
@@ -404,7 +417,7 @@ public class CameraActivity extends Activity {
         // likewise for the camera object itself.
         //parameters.setPreviewSize(profile.videoFrameWidth, profile.videoFrameHeight);
         parameters.setPreviewSize(optimalSize.width, optimalSize.height);
-        parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
+        parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_INFINITY);
         mCamera.setParameters(parameters);
 
         mCamera.setPreviewTexture(mPreview.getSurfaceTexture());
